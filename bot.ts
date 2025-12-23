@@ -8,6 +8,14 @@ dotenv.config();
 console.log('Starting WhatsApp bot...');
 
 const MY_GROUP_ID = process.env.MY_GROUP_ID;
+const MY_PHONE_NUMBER = process.env.MY_PHONE_NUMBER;
+
+if (!MY_GROUP_ID || !MY_PHONE_NUMBER) {
+    console.error('❌ Missing environment variables! Check your .env file.');
+    console.error('Required: MY_GROUP_ID and MY_PHONE_NUMBER');
+    process.exit(1);
+}
+
 
 const client = new Client({
     authStrategy: new LocalAuth(),
@@ -27,7 +35,6 @@ client.on('ready', () => {
     console.log('✅ Bot is ready!');
 });
 
-// Parse relative time (5m, 2h, etc)
 function parseRelativeTime(timeStr: string): number | null {
     const match = timeStr.match(/^(\d+)(s|m|h|d)$/);
     if (!match) return null;
@@ -42,37 +49,27 @@ function parseRelativeTime(timeStr: string): number | null {
     return null;
 }
 
-// Parse absolute date/time
 function parseAbsoluteTime(dateStr: string, timeStr?: string): number | null {
     try {
-        // Support formats:
-        // DD-MM-YYYY HH:MM
-        // DD/MM/YYYY HH:MM
-        // YYYY-MM-DD HH:MM
-        
         let dateTimeStr = dateStr;
         if (timeStr) {
             dateTimeStr = `${dateStr} ${timeStr}`;
         }
         
-        // Try to parse various formats
         let targetDate: Date | null = null;
         
-        // Format: DD-MM-YYYY HH:MM or DD/MM/YYYY HH:MM
         const dmyMatch = dateTimeStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})\s+(\d{1,2}):(\d{2})$/);
         if (dmyMatch) {
             const [, day, month, year, hour, minute] = dmyMatch;
             targetDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute));
         }
         
-        // Format: YYYY-MM-DD HH:MM
         const ymdMatch = dateTimeStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})\s+(\d{1,2}):(\d{2})$/);
         if (ymdMatch) {
             const [, year, month, day, hour, minute] = ymdMatch;
             targetDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute));
         }
         
-        // Format: Just date (DD-MM-YYYY), default to 9:00 AM
         const dateOnlyMatch = dateStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
         if (dateOnlyMatch && !timeStr) {
             const [, day, month, year] = dateOnlyMatch;
@@ -86,9 +83,8 @@ function parseAbsoluteTime(dateStr: string, timeStr?: string): number | null {
         const now = new Date();
         const delay = targetDate.getTime() - now.getTime();
         
-        // Don't allow past dates
         if (delay < 0) {
-            return -1; // Special value for past dates
+            return -1; 
         }
         
         return delay;
@@ -136,23 +132,18 @@ client.on('message_create', async (msg) => {
         let reminderText: string;
         let timeDescription: string;
         
-        // Try parsing as relative time first (5m, 2h, etc)
         delay = parseRelativeTime(parts[1]);
         
         if (delay) {
-            // Relative time format
             reminderText = parts.slice(2).join(' ');
             timeDescription = parts[1];
         } else {
-            // Try parsing as absolute date/time
-            // Check if parts[2] looks like a time (HH:MM)
+
             if (parts[2] && parts[2].match(/^\d{1,2}:\d{2}$/)) {
-                // Format: !remind DD-MM-YYYY HH:MM message
                 delay = parseAbsoluteTime(parts[1], parts[2]);
                 reminderText = parts.slice(3).join(' ');
                 timeDescription = `${parts[1]} ${parts[2]}`;
             } else {
-                // Format: !remind DD-MM-YYYY message (no time)
                 delay = parseAbsoluteTime(parts[1]);
                 reminderText = parts.slice(2).join(' ');
                 timeDescription = `${parts[1]} at 9:00 AM`;
@@ -177,11 +168,10 @@ client.on('message_create', async (msg) => {
         await msg.reply(`✅ Reminder set for ${timeDescription}: "${reminderText}"`);
         
         setTimeout(async () => {
-            await client.sendMessage(MY_GROUP_ID, `⏰ REMINDER: ${reminderText}`);
-            console.log(`✅ Sent reminder`);
+            await client.sendMessage(MY_PHONE_NUMBER, `⏰ REMINDER: ${reminderText}`);
+            console.log(`✅ Sent reminder to phone`);
         }, delay);
         
-        // Calculate actual time
         const targetTime = new Date(Date.now() + delay);
         console.log(`⏰ Reminder scheduled: ${reminderText} at ${targetTime.toLocaleString()}`);
     }
